@@ -75,6 +75,7 @@ class bilibili
          * 按照老夫追了那么多番剧,看了那么多情况,可以将它归纳一下
          * 
          * name    : 番剧名称 [Done]
+         * des     : 描述简介 没有的话就是 '暂无简介' [Done]
          * status  : 番剧状态 0为正在播 1为将开 2为完结 [Done]
          * followst: 追番状态(自动判断) 0为未看,1为在看,2为看完 [Done]
          * basket  : 在B站定的状态,0为想看 1为在看 2为看完 [Done]
@@ -84,7 +85,7 @@ class bilibili
          * img     : 图片 [Done]
          * coin    : 硬币 [Done]
          * score   : 分数 未开/未评分番剧是0.0 [Done]
-         * new     : 最新集(array)={title:名字 ep:集数 finish:是否完结撒花} [Waiting]
+         * new     : 最新集(array)={title:名字 ep:集数 finish:是否完结撒花} [Done]
          * 
          */
         if ($data == null) {
@@ -93,6 +94,7 @@ class bilibili
         $ret = array();
         foreach ($data as $bangumi) {
             $temp['name'] = $bangumi['title']; // 名称
+            $temp['des']=$bangumi['evaluate']?$bangumi['evaluate']:'暂无简介'; // 简介
             //番剧状态
             if ($bangumi['is_finish']) {
                 $temp['status'] = 2;
@@ -109,6 +111,7 @@ class bilibili
                 $total = 0;
             } else {
                 $total = $bangumi['new_ep']['title'];
+                if (!is_numeric($total)) $ep=$bangumi['total_count']; //有些最后是Extra,默认识别为最后一集
             }
             $temp['all'] = $total;
 
@@ -121,7 +124,7 @@ class bilibili
             } elseif (!$bangumi['is_start']) {
                 $ep = 0;
             } else {
-                $ep = self::getSubstr($bangumi['progress'], '第', '话'); //匹配左右取中间数字
+                $ep = self::getSubstr($bangumi['progress'], '第', '话'); //匹配左右取中间数字                
             }
 
             //追番状态 - Auto
@@ -148,6 +151,13 @@ class bilibili
             //进度
             $percent= floor($ep*100/$total);
             $temp['progress']=$percent;
+
+            //最新
+            $temp['new']=array(
+                'title'=>'第'.$total.'话 '.(isset($bangumi['new_ep']['long_title'])?$bangumi['new_ep']['long_title']:$bangumi['new_ep']['title']),//紫罗兰的永恒花园为例子,最后一集没有long_title
+                'ep'=> $total,
+                'finish'=> $bangumi['is_finish']
+            );
 
             $ret[] = $temp;
             //循环尾 看清楚
