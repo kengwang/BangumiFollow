@@ -1,0 +1,1 @@
+This is the old version of bangumi follow made for an wordpress theme

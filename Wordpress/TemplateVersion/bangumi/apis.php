@@ -1,5 +1,5 @@
 <?php
-include_once 'config.php';
+
 /**
  * Bangumi追番API
  * @author Kengwang
@@ -29,7 +29,7 @@ class bilibili
         //之后记得换成WordPress的函数啊,天啊
         $arr = array(
             'uid' => '341151171', //用户ID
-            'cookie' => 'SESSDATA=*******打码233****' //cookie,假如说没有公开就要填写,只需要SESSDATA
+            'cookie' => 'SESSDATA=f7519f5a%2C1572180247%2C145fae91; ' //cookie,假如说没有公开就要填写,只需要SESSDATA
         );
         if (isset($arr[$arg])) return $arr[$arg];
         else return '';
@@ -48,7 +48,7 @@ class bilibili
          * 
          * 还有什么参数后期补充哦
          */
-        $back = Functions::curl("https://api.bilibili.com/x/space/bangumi/follow/list?type=1&follow_status=0&vmid=" . self::getUserInfo('uid'), self::getUserinfo('cookie'));
+        $back = BGMFL::curl("https://api.bilibili.com/x/space/bangumi/follow/list?type=1&follow_status=0&vmid=" . self::getUserInfo('uid'), self::getUserinfo('cookie'));
 
         $array = json_decode($back, true);
         return $array;
@@ -74,13 +74,16 @@ class bilibili
         /**
          * 按照老夫追了那么多番剧,看了那么多情况,可以将它归纳一下
          * 
+         * ssid    : 唯一番剧ID [Done]
          * name    : 番剧名称 [Done]
          * des     : 描述简介 没有的话就是 '暂无简介' [Done]
+         * link    : 链接 [Done]
          * status  : 番剧状态 0为正在播 1为将开 2为完结 [Done]
          * followst: 追番状态(自动判断) 0为未看,1为在看,2为看完 [Done]
          * basket  : 在B站定的状态,0为想看 1为在看 2为看完 [Done]
          * all     : 总集数 未开为0 [Done]
          * watched : 已观看集数 PV为0 [Done]
+         * nowraw  : 已观看集数和时间 (Bilibili直接显示) [Done]
          * progress: 特色功能,追番进度 n% [Done]
          * img     : 图片 [Done]
          * coin    : 硬币 [Done]
@@ -89,12 +92,15 @@ class bilibili
          * 
          */
         if ($data == null) {
-            $data = getFollowingList();
+            $data = self::getFollowingList();
         }
         $ret = array();
         foreach ($data as $bangumi) {
+            $temp['ssid'] = $bangumi['season_id']; //ID
             $temp['name'] = $bangumi['title']; // 名称
-            $temp['des']=$bangumi['evaluate']?$bangumi['evaluate']:'暂无简介'; // 简介
+            $temp['des'] = isset($bangumi['evaluate']) && $bangumi['evaluate'] != '' ? $bangumi['evaluate'] : '暂无简介'; // 简介
+            $temp['link'] = 'https:////www.bilibili.com/bangumi/play/ss' . $bangumi['season_id'] . '/'; //链接
+            $temp['nowraw']=$bangumi['progress']; //进度复杂型
             //番剧状态
             if ($bangumi['is_finish']) {
                 $temp['status'] = 2;
@@ -105,30 +111,33 @@ class bilibili
             }
 
             //获取总集数
+            $total = 0;
             if ($bangumi['is_finish']) {
-                $total = $bangumi['total_count'];//total_count是预计总集数
-            } elseif (!strpos($bangumi['new_ep']['index_show'], '即将开播')) {
+                $total = $bangumi['total_count']; //total_count是预计总集数
+            } elseif (!$bangumi['is_started'] || $bangumi['new_ep']['index_show'] == '即将开播') {
                 $total = 0;
             } else {
                 $total = $bangumi['new_ep']['title'];
-                if (!is_numeric($total)) $ep=$bangumi['total_count']; //有些最后是Extra,默认识别为最后一集
+                if (!is_numeric($total)) $total = $bangumi['total_count']; //有些最后是Extra,默认识别为最后一集
             }
+            if ($total < 0) $total = 0;
             $temp['all'] = $total;
 
             //获取当前看到的集数
             $ep = 0;
-            if (strpos($bangumi['progress'], 'PV') || strpos($bangumi['progress'], '将开') || $bangumi['is_started']) { //没有开始
+            if (!$bangumi['is_started']) { //没有开始
                 $ep = 0;
             } elseif ($bangumi['is_finish']) {
                 $ep = $total;
-            } elseif (!$bangumi['is_start']) {
-                $ep = 0;
+            } elseif (isset($bangumi['progress']) && !strpos($bangumi['progress'], 'PV')) {
+                $ep = self::getSubstr($bangumi['progress'], '第', '话'); //匹配左右取中间数字             
             } else {
-                $ep = self::getSubstr($bangumi['progress'], '第', '话'); //匹配左右取中间数字                
+                $ep = 0;
             }
+            $temp['watched'] = $ep;
 
             //追番状态 - Auto
-            if (!$bangumi['is_started'] || $ep = 0) {
+            if (!$bangumi['is_started'] || $ep == 0) {
                 $temp['followst'] = 0;
             } elseif ($ep == $total) {
                 $temp['followst'] = 2;
@@ -149,14 +158,18 @@ class bilibili
             $temp['score'] = $bangumi['rating']['score'];
 
             //进度
-            $percent= floor($ep*100/$total);
-            $temp['progress']=$percent;
+            if ($total == 0) {
+                $percent = 0;
+            } else {
+                $percent = floor($ep * 100 / $total);
+            }
+            $temp['progress'] = $percent;
 
             //最新
-            $temp['new']=array(
-                'title'=>'第'.$total.'话 '.(isset($bangumi['new_ep']['long_title'])?$bangumi['new_ep']['long_title']:$bangumi['new_ep']['title']),//紫罗兰的永恒花园为例子,最后一集没有long_title
-                'ep'=> $total,
-                'finish'=> $bangumi['is_finish']
+            $temp['new'] = array(
+                'title' => '第' . $total . '话 ' . (isset($bangumi['new_ep']['long_title']) ? $bangumi['new_ep']['long_title'] : $bangumi['new_ep']['title']), //紫罗兰的永恒花园为例子,最后一集没有long_title
+                'ep' => $total,
+                'finish' => $bangumi['is_finish']
             );
 
             $ret[] = $temp;
