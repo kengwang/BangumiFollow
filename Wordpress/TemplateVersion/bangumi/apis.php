@@ -96,6 +96,21 @@ class bilibili
         }
         $ret = array();
         foreach ($data as $bangumi) {
+            //判断是否填写Cookie
+            if (empty($bangumi['both_follow'])){
+                $temp['ssid']=0;
+                $temp['name'] = "Cookie填写错误:Cookie错误"; // 名称
+                $temp['des']="可能由于格式不对或者Cookie过期,请重新获取Cookie并且更改Cookie";
+                $ret[] = $temp;
+                break;
+            }elseif($bangumi['both_follow']==0){
+                $temp['ssid']=0;
+                $temp['name'] = "Cookie填写错误:Cookie与用户名不匹配"; // 名称
+                $temp['des']="可能由于格式不对或者Cookie过期,请重新获取Cookie并且更改Cookie";
+                $ret[] = $temp;
+                break;
+            }
+
             $temp['ssid'] = $bangumi['season_id']; //ID
             $temp['name'] = $bangumi['title']; // 名称
             $temp['des'] = isset($bangumi['evaluate']) && $bangumi['evaluate'] != '' ? $bangumi['evaluate'] : '暂无简介'; // 简介
