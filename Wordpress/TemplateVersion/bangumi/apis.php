@@ -127,7 +127,7 @@ class bilibili
             $ep = 0;
             if (!$bangumi['is_started']) { //没有开始
                 $ep = 0;
-            } elseif ($bangumi['is_finish']) {
+            } elseif (strpos($bangumi['progress'],'已看完')) {
                 $ep = $total;
             } elseif (isset($bangumi['progress']) && !strpos($bangumi['progress'], 'PV')) {
                 $ep = self::getSubstr($bangumi['progress'], '第', '话'); //匹配左右取中间数字             
